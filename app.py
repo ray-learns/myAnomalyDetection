@@ -4,85 +4,90 @@ import plotly.express as px
 from sklearn.ensemble import IsolationForest
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="Anomaly Detector", page_icon="🚨", layout="wide")
+st.set_page_config(page_title="Custom Anomaly Detector", page_icon="🚨", layout="wide")
 
-st.title("🚨 Transaction Anomaly Detector")
+st.title("🚨 Universal Anomaly Detection Tool")
 st.markdown("""
-This app uses **Machine Learning (Isolation Forest)** to detect unusual patterns in transaction data.
-The model analyzes `Amount` and `Distance from Home` to find outliers.
+Upload any CSV file, select your features, and use **Machine Learning** to identify outliers in your data.
 """)
 
-# 2. DATA LOADING
-@st.cache_data
-def load_data():
+# 2. FILE UPLOADER
+uploaded_file = st.file_uploader("Upload your transaction or sensor data (CSV)", type=['csv'])
+
+
+
+if uploaded_file is not None:
     try:
-        df = pd.read_csv('transactions_sample.csv')
-        # Clean column names
-        df.columns = df.columns.str.strip()
-        return df
+        # Load the user's data
+        df = pd.read_csv(uploaded_file)
+        df.columns = df.columns.str.strip() # Clean column names
+        
+        st.write("### Data Preview", df.head())
+
+        # 3. FEATURE SELECTION
+        # Identify numeric columns only for the ML model
+        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+        
+        if len(numeric_cols) < 2:
+            st.error("The uploaded file needs at least two numeric columns for analysis.")
+        else:
+            st.sidebar.header("Model Settings")
+            
+            # Allow user to pick features
+            feature_x = st.sidebar.selectbox("Select First Feature (X-axis)", numeric_cols, index=0)
+            feature_y = st.sidebar.selectbox("Select Second Feature (Y-axis)", numeric_cols, index=min(1, len(numeric_cols)-1))
+            
+            contamination = st.sidebar.slider("Contamination Rate (% of expected outliers)", 0.01, 0.20, 0.05)
+
+            # 4. ANOMALY DETECTION LOGIC
+            model = IsolationForest(contamination=contamination, random_state=42)
+            
+            # We train on the two selected columns
+            features = [feature_x, feature_y]
+            df['anomaly_score'] = model.fit_predict(df[features])
+            
+            # Map results: -1 is Anomaly, 1 is Normal
+            df['Status'] = df['anomaly_score'].map({1: 'Normal', -1: 'Suspicious'})
+
+            # 5. VISUALIZATION
+            
+            
+            fig = px.scatter(
+                df, x=feature_x, y=feature_y,
+                color='Status',
+                symbol='Status',
+                color_discrete_map={'Normal': '#00CC96', 'Suspicious': '#EF553B'},
+                hover_data=df.columns.tolist(),
+                title=f"Anomaly Detection: {feature_x} vs {feature_y}",
+                template="plotly_dark"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 6. RESULTS TABLE
+            st.write("---")
+            st.subheader("Detected Anomalies")
+            anomalies = df[df['Status'] == 'Suspicious']
+            
+            if not anomalies.empty:
+                st.write(f"Found **{len(anomalies)}** suspicious data points.")
+                st.dataframe(anomalies)
+                
+                # Allow user to download the results
+                csv = anomalies.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Anomaly List",
+                    data=csv,
+                    file_name='detected_anomalies.csv',
+                    mime='text/csv',
+                )
+            else:
+                st.success("No anomalies detected with current settings.")
+
     except Exception as e:
-        st.error(f"Could not load data: {e}")
-        return None
-
-df = load_data()
-
-if df is not None:
-    # 3. SIDEBAR PARAMETERS
-    st.sidebar.header("Model Settings")
-    # Contamination is the estimated percentage of anomalies in the data
-    contamination = st.sidebar.slider("Contamination Rate (Estimated % of outliers)", 0.01, 0.50, 0.10)
-    
-    # 4. ANOMALY DETECTION LOGIC
-    # We use amount and distance as features
-    features = ['amount', 'dist_from_home']
-    
-    # Initialize and fit the model
-    model = IsolationForest(contamination=contamination, random_state=42)
-    df['anomaly_score'] = model.fit_predict(df[features])
-    
-    # Isolation Forest returns -1 for anomalies and 1 for normal data
-    # Let's map it to something more readable
-    df['Status'] = df['anomaly_score'].map({1: 'Normal', -1: 'Suspicious'})
-
-    # 5. VISUALIZATION
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
-        st.subheader("Anomaly Map: Amount vs. Distance")
-        fig = px.scatter(
-            df, x='amount', y='dist_from_home',
-            color='Status',
-            symbol='Status',
-            color_discrete_map={'Normal': '#00CC96', 'Suspicious': '#EF553B'},
-            hover_data=['transaction_id', 'merchant_category'],
-            title="Detected Anomalies (Red Points)",
-            template="plotly_dark"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        st.subheader("Detection Summary")
-        total_anomalies = len(df[df['Status'] == 'Suspicious'])
-        st.metric("Suspicious Activities Found", total_anomalies)
-        
-        st.write("---")
-        st.write("**Top Suspicious Transactions:**")
-        st.dataframe(df[df['Status'] == 'Suspicious'][['transaction_id', 'amount', 'dist_from_home', 'merchant_category']])
-
-    # 6. GROUND TRUTH COMPARISON (If 'is_fraud' column exists)
-    if 'is_fraud' in df.columns:
-        st.write("---")
-        st.subheader("Model Performance vs. Ground Truth")
-        st.write("Comparing the Machine Learning flags against the known 'is_fraud' labels.")
-        
-        # Create a comparison dataframe
-        comparison = df[['transaction_id', 'is_fraud', 'Status']].copy()
-        comparison['ML_Detected'] = comparison['Status'].apply(lambda x: 1 if x == 'Suspicious' else 0)
-        
-        st.table(comparison.head(10))
+        st.error(f"An error occurred while processing the file: {e}")
 
 else:
-    st.info("Please ensure 'transactions_sample.csv' is in your repository.")
+    st.info("👆 Please upload a CSV file to begin the analysis.")
 
 st.markdown("---")
-st.caption("Machine Learning Anomaly Detection System")
+st.caption("Machine Learning Anomaly Detection System | Powered by Isolation Forest")
