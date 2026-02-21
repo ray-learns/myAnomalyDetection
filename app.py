@@ -8,7 +8,7 @@ st.set_page_config(page_title="Custom Anomaly Detector", page_icon="🚨", layou
 
 st.title("🚨 Anomaly Detection Tool")
 st.markdown("""
-Upload any CSV file, select your features, and use **Machine Learning** to identify outliers in your data.
+Upload your data file in CSV format, select your features, and this tool will help to identify outliers in your data.
 """)
 
 # 2. FILE UPLOADER
