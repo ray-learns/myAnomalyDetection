@@ -6,7 +6,7 @@ from sklearn.ensemble import IsolationForest
 # 1. PAGE SETUP
 st.set_page_config(page_title="Custom Anomaly Detector", page_icon="🚨", layout="wide")
 
-st.title("🚨 Universal Anomaly Detection Tool")
+st.title("🚨 Anomaly Detection Tool")
 st.markdown("""
 Upload any CSV file, select your features, and use **Machine Learning** to identify outliers in your data.
 """)
